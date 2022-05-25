@@ -31,6 +31,19 @@ local consumer_schema = {
     properties = {
         region = { type = "string" },
         pool_id = { type = "string" },
+        white_list = {
+            type = "array",
+            items = {
+                type = "object",
+                properties = {
+                    method = { type = "string" },
+                    path = { type = "string" },
+                },
+                required = { "method", "path" },
+            },
+            uniqueItems = true,
+            default = {}
+        },
         timeout = { type = "integer", minimum = 1000, default = 3000 },
         keepalive = { type = "boolean", default = true },
         keepalive_timeout = { type = "integer", minimum = 1000, default = 60000 },
@@ -343,12 +356,25 @@ local function get_unauthorized_response(msg)
     return 401, { code = "api.unauthorized", meta = { message = msg, stack = null } }
 end
 
-function _M.access(conf, ctx)
+local function will_check_auth(conf, ctx)
+    if not conf.white_list then
+        return true
+    end
 
+    for _, v in pairs(conf.white_list) do
+        if ctx.var.request_method == v.method and string.match(ctx.var.request_uri, v.path) ~= nil then
+            return false
+        end
+    end
+
+    return true
+end
+
+local function auth(conf, ctx)
     local access_token, error = fetch_access_token(conf, ctx)
 
     if not access_token or error then
-        return get_unauthorized_response("Missing auth token in request")
+        return get_unauthorized_response("You must be logged in to perform this action")
     end
 
     local decoded_payload = jwt:load_jwt(access_token)
@@ -360,20 +386,26 @@ function _M.access(conf, ctx)
     local auth_secret, ex = get_pem_from_jwk(conf, decoded_payload.header.kid)
 
     if ex then
-        return get_unauthorized_response("Failed to verify auth token")
+        return get_unauthorized_response("You must be logged in to perform this action")
     end
 
     if not auth_secret then
-        return get_unauthorized_response("Failed to verify auth token")
+        return get_unauthorized_response("You must be logged in to perform this action")
     end
 
     local res = jwt:verify_jwt_obj(auth_secret, decoded_payload)
 
     if not res.verified then
-        return get_unauthorized_response("Failed to verify auth token")
+        return get_unauthorized_response("You must be logged in to perform this action")
     end
 
     core.request.set_header(ctx, "user", core.json.encode(res.payload))
+end
+
+function _M.rewrite(conf, ctx)
+    if will_check_auth(conf, ctx) then
+        return auth(conf, ctx)
+    end
 end
 
 return _M
