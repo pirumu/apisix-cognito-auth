@@ -6,7 +6,18 @@
 ```json
 {
   "region": "ap-southeast-1",
-  "pool_id": "ap-southeast-1_jkfRcWs0L"
+  "pool_id": "ap-southeast-1_jkfRcWs0L",
+  "white_list": [
+    {
+      "method": "GET",
+      "path": "/stream/document"
+    }
+  ],
+  "ssl_verify": false,
+  "timeout": 3000,
+  "cache_ttl_seconds": 86400,
+  "keepalive": true,
+  "keepalive_timeout": 60000,
 }
 ```
 ## See more: [https://apisix.apache.org/docs/apisix/plugin-develop](https://apisix.apache.org/docs/apisix/plugin-develop)
